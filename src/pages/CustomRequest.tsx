@@ -1,7 +1,9 @@
 import { useState } from "react";
 import { Sparkles, Send, CheckCircle } from "lucide-react";
 import { motion } from "framer-motion";
-import { mockCustomRequests } from "@/lib/mockData";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { customRequestsAPI } from "@/lib/api";
+import { toast } from "@/hooks/use-toast";
 
 const CustomRequest = () => {
   const [submitted, setSubmitted] = useState(false);
@@ -15,9 +17,58 @@ const CustomRequest = () => {
     budget: "",
   });
 
+  // Fetch user's custom requests
+  const { data: requestsData, refetch } = useQuery({
+    queryKey: ['custom-requests'],
+    queryFn: customRequestsAPI.getMyRequests,
+  });
+
+  const requests = requestsData?.requests || [];
+
+  // Create request mutation
+  const createRequestMutation = useMutation({
+    mutationFn: (data: {
+      occasion: string;
+      names: string;
+      brandName?: string;
+      tone: string;
+      language: string;
+      description: string;
+      budget: number;
+    }) => customRequestsAPI.createRequest(data),
+    onSuccess: () => {
+      toast({
+        title: "Request submitted!",
+        description: "We'll start working on your custom song soon.",
+      });
+      setSubmitted(true);
+      refetch();
+      // Reset form
+      setForm({
+        occasion: "",
+        names: "",
+        brandName: "",
+        tone: "",
+        language: "",
+        description: "",
+        budget: "",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Submission failed",
+        description: error.response?.data?.message || "Something went wrong. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    setSubmitted(true);
+    createRequestMutation.mutate({
+      ...form,
+      budget: parseInt(form.budget),
+    });
   };
 
   const tones = ["Romantic", "Hype", "Emotional", "Devotional", "Corporate"];
@@ -159,16 +210,21 @@ const CustomRequest = () => {
 
             <button
               type="submit"
-              className="w-full py-3 rounded-xl font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-all glow-primary flex items-center justify-center gap-2"
+              disabled={createRequestMutation.isPending}
+              className="w-full py-3 rounded-xl font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-all glow-primary flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <Send className="w-4 h-4" />
-              Submit Request
+              {createRequestMutation.isPending ? (
+                <div className="w-4 h-4 border border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin" />
+              ) : (
+                <Send className="w-4 h-4" />
+              )}
+              {createRequestMutation.isPending ? "Submitting..." : "Submit Request"}
             </button>
           </motion.form>
         )}
 
         {/* Request Status */}
-        {mockCustomRequests.length > 0 && (
+        {requests.length > 0 && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -179,8 +235,8 @@ const CustomRequest = () => {
               Your Requests
             </h2>
             <div className="space-y-4">
-              {mockCustomRequests.map((req) => (
-                <div key={req.id} className="glass rounded-xl p-5">
+              {requests.map((req: any) => (
+                <div key={req._id} className="glass rounded-xl p-5">
                   <div className="flex items-start justify-between">
                     <div>
                       <h3 className="font-display font-semibold text-foreground">

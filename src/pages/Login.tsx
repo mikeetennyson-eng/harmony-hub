@@ -1,11 +1,60 @@
 import { useState } from "react";
-import { Music, Mail, Lock, Eye, EyeOff } from "lucide-react";
+import { Music, Mail, Lock, Eye, EyeOff, User } from "lucide-react";
 import { motion } from "framer-motion";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+import { useAuth } from "@/contexts/AuthContext";
+import { useToast } from "@/hooks/use-toast";
 
 const Login = () => {
   const [isSignUp, setIsSignUp] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [formData, setFormData] = useState({
+    name: '',
+    email: '',
+    password: ''
+  });
+
+  const { login, register } = useAuth();
+  const { toast } = useToast();
+  const navigate = useNavigate();
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+
+    try {
+      if (isSignUp) {
+        await register(formData.email, formData.password, formData.name);
+        toast({
+          title: "Account created successfully!",
+          description: "Welcome to AI Song Vault",
+        });
+      } else {
+        await login(formData.email, formData.password);
+        toast({
+          title: "Welcome back!",
+          description: "Successfully signed in",
+        });
+      }
+      navigate('/');
+    } catch (error: any) {
+      toast({
+        title: "Authentication failed",
+        description: error.response?.data?.message || "Please check your credentials",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setFormData(prev => ({
+      ...prev,
+      [e.target.name]: e.target.value
+    }));
+  };
 
   return (
     <div className="min-h-screen flex items-center justify-center px-4 pt-16">
@@ -28,17 +77,24 @@ const Login = () => {
         </div>
 
         <form
-          onSubmit={(e) => e.preventDefault()}
+          onSubmit={handleSubmit}
           className="glass rounded-2xl p-6 md:p-8 space-y-5"
         >
           {isSignUp && (
             <div>
               <label className="block text-sm font-medium text-foreground mb-2">Full Name</label>
-              <input
-                type="text"
-                placeholder="Your name"
-                className="w-full px-4 py-3 rounded-xl bg-secondary text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all"
-              />
+              <div className="relative">
+                <User className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <input
+                  type="text"
+                  name="name"
+                  placeholder="Your name"
+                  value={formData.name}
+                  onChange={handleInputChange}
+                  required
+                  className="w-full pl-11 pr-4 py-3 rounded-xl bg-secondary text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all"
+                />
+              </div>
             </div>
           )}
 
@@ -48,7 +104,11 @@ const Login = () => {
               <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <input
                 type="email"
+                name="email"
                 placeholder="you@example.com"
+                value={formData.email}
+                onChange={handleInputChange}
+                required
                 className="w-full pl-11 pr-4 py-3 rounded-xl bg-secondary text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all"
               />
             </div>
@@ -60,7 +120,12 @@ const Login = () => {
               <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <input
                 type={showPassword ? "text" : "password"}
+                name="password"
                 placeholder="••••••••"
+                value={formData.password}
+                onChange={handleInputChange}
+                required
+                minLength={6}
                 className="w-full pl-11 pr-11 py-3 rounded-xl bg-secondary text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all"
               />
               <button
@@ -75,9 +140,10 @@ const Login = () => {
 
           <button
             type="submit"
-            className="w-full py-3 rounded-xl font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-all glow-primary"
+            disabled={loading}
+            className="w-full py-3 rounded-xl font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-all glow-primary disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {isSignUp ? "Create Account" : "Sign In"}
+            {loading ? "Please wait..." : (isSignUp ? "Create Account" : "Sign In")}
           </button>
 
           <p className="text-center text-sm text-muted-foreground">

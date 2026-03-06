@@ -1,44 +1,98 @@
 import { useState, useRef, useEffect } from "react";
 import { Play, Pause, SkipBack, SkipForward, Volume2, VolumeX } from "lucide-react";
 import { motion } from "framer-motion";
+import { songsAPI } from "../lib/api";
 
 interface AudioPlayerProps {
   title: string;
   artist: string;
-  coverImage: string;
+  songId?: string; // Song ID instead of direct src
+  src?: string; // actual audio url (for backwards compatibility)
   isPreview?: boolean;
   maxDuration?: number;
 }
 
-const AudioPlayer = ({ title, artist, coverImage, isPreview = true, maxDuration = 120 }: AudioPlayerProps) => {
+const AudioPlayer = ({ title, artist, songId, src: directSrc, isPreview = true, maxDuration = 120 }: AudioPlayerProps) => {
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [isMuted, setIsMuted] = useState(false);
+  const [src, setSrc] = useState<string>(directSrc || '');
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const lastUpdateRef = useRef(0);
+  const isSeeking = useRef(false);
+  const blobUrlRef = useRef<string>('');
   const duration = maxDuration;
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Fetch audio blob and create object URL
+  useEffect(() => {
+    if (songId) {
+      const fetchAudio = async () => {
+        try {
+          const blob = await songsAPI.getAudioStream(songId);
+          // Revoke old blob URL to free memory
+          if (blobUrlRef.current) {
+            URL.revokeObjectURL(blobUrlRef.current);
+          }
+          // Create new blob URL
+          const blobUrl = URL.createObjectURL(blob);
+          blobUrlRef.current = blobUrl;
+          setSrc(blobUrl);
+          console.log('Audio blob loaded:', songId);
+        } catch (error) {
+          console.error('Failed to load audio:', error);
+          setSrc('');
+        }
+      };
+
+      fetchAudio();
+    } else if (directSrc) {
+      setSrc(directSrc);
+    }
+
+    return () => {
+      // Clean up blob URL on unmount
+      if (blobUrlRef.current) {
+        URL.revokeObjectURL(blobUrlRef.current);
+        blobUrlRef.current = '';
+      }
+    };
+  }, [songId, directSrc]);
+
+  // Only update audio currentTime when user manually seeks
+  useEffect(() => {
+    if (audioRef.current && isSeeking.current) {
+      audioRef.current.currentTime = currentTime;
+    }
+  }, [currentTime]);
 
   useEffect(() => {
     return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current);
+      if (audioRef.current) {
+        audioRef.current.pause();
+      }
     };
   }, []);
 
+  // Don't render if no src
+  if (!src) {
+    return (
+      <div className="glass-strong rounded-2xl p-5">
+        <div className="text-center text-muted-foreground">
+          <p>Audio not available</p>
+          {isPreview && <p className="text-xs mt-2">Purchase this song to listen</p>}
+        </div>
+      </div>
+    );
+  }
+
   const togglePlay = () => {
+    if (!audioRef.current) return;
     if (isPlaying) {
-      if (intervalRef.current) clearInterval(intervalRef.current);
+      audioRef.current.pause();
       setIsPlaying(false);
     } else {
+      audioRef.current.play().catch(() => {});
       setIsPlaying(true);
-      intervalRef.current = setInterval(() => {
-        setCurrentTime((prev) => {
-          if (prev >= duration) {
-            if (intervalRef.current) clearInterval(intervalRef.current);
-            setIsPlaying(false);
-            return 0;
-          }
-          return prev + 1;
-        });
-      }, 1000);
     }
   };
 
@@ -48,16 +102,39 @@ const AudioPlayer = ({ title, artist, coverImage, isPreview = true, maxDuration 
     return `${mins}:${secs.toString().padStart(2, "0")}`;
   };
 
+  // Only update display every 100ms, don't reset audio element
+  const handleTimeUpdate = () => {
+    if (audioRef.current && !isSeeking.current) {
+      const now = Date.now();
+      if (now - lastUpdateRef.current >= 100) {
+        setCurrentTime(audioRef.current.currentTime);
+        lastUpdateRef.current = now;
+      }
+    }
+  };
+
   const progressPercent = (currentTime / duration) * 100;
 
   return (
     <div className="glass-strong rounded-2xl p-5">
-      <div className="flex items-center gap-4">
-        {/* Cover */}
-        <div className="w-16 h-16 rounded-xl overflow-hidden flex-shrink-0">
-          <img src={coverImage} alt={title} className="w-full h-full object-cover" />
-        </div>
+      <audio
+        ref={audioRef}
+        src={src}
+        crossOrigin="anonymous"
+        preload="auto"
+        onTimeUpdate={handleTimeUpdate}
+        onEnded={() => setIsPlaying(false)}
+        onError={(e) => {
+          console.error('Audio loading error:', e);
+          const audio = e.currentTarget;
+          console.error('Audio error code:', audio.error?.code);
+          console.error('Audio error message:', audio.error?.message);
+        }}
+        onLoadStart={() => console.log('Audio load start')}
+        muted={isMuted}
+      />
 
+      <div className="flex items-center gap-4">
         {/* Info & Controls */}
         <div className="flex-1 min-w-0">
           <h4 className="font-display font-semibold text-foreground truncate">{title}</h4>
@@ -71,10 +148,15 @@ const AudioPlayer = ({ title, artist, coverImage, isPreview = true, maxDuration 
             <div
               className="flex-1 h-1.5 rounded-full bg-muted cursor-pointer relative"
               onClick={(e) => {
+                if (!audioRef.current) return;
+                isSeeking.current = true;
                 const rect = e.currentTarget.getBoundingClientRect();
                 const x = e.clientX - rect.left;
                 const percent = x / rect.width;
-                setCurrentTime(Math.floor(percent * duration));
+                const newTime = percent * duration;
+                audioRef.current.currentTime = newTime;
+                setCurrentTime(newTime);
+                setTimeout(() => { isSeeking.current = false; }, 100);
               }}
             >
               <motion.div

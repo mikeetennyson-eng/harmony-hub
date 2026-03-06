@@ -1,28 +1,26 @@
 import { useState, useMemo } from "react";
 import { Search, Sparkles } from "lucide-react";
 import { motion } from "framer-motion";
+import { useQuery } from "@tanstack/react-query";
 import SongCard from "@/components/SongCard";
 import TagFilter from "@/components/TagFilter";
-import { mockSongs } from "@/lib/mockData";
+import { songsAPI, Song } from "@/lib/api";
 import heroBg from "@/assets/hero-bg.jpg";
 
 const Index = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
 
-  const filteredSongs = useMemo(() => {
-    return mockSongs.filter((song) => {
-      if (song.isSold) return false;
-      const matchesSearch =
-        searchQuery === "" ||
-        song.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        song.tags.some((t) => t.toLowerCase().includes(searchQuery.toLowerCase()));
-      const matchesTags =
-        selectedTags.length === 0 ||
-        selectedTags.some((tag) => song.tags.includes(tag));
-      return matchesSearch && matchesTags;
-    });
-  }, [searchQuery, selectedTags]);
+  // Fetch songs from API
+  const { data: songsData, isLoading, error } = useQuery({
+    queryKey: ['songs', searchQuery, selectedTags],
+    queryFn: () => songsAPI.getSongs({
+      search: searchQuery || undefined,
+      tags: selectedTags.length > 0 ? selectedTags.join(',') : undefined
+    }),
+  });
+
+  const songs = songsData?.songs || [];
 
   const handleTagToggle = (tag: string) => {
     setSelectedTags((prev) =>
@@ -92,14 +90,23 @@ const Index = () => {
           <TagFilter selectedTags={selectedTags} onTagToggle={handleTagToggle} />
         </motion.div>
 
-        {filteredSongs.length === 0 ? (
+        {isLoading ? (
+          <div className="text-center py-20">
+            <div className="animate-spin w-8 h-8 border-2 border-primary border-t-transparent rounded-full mx-auto mb-4"></div>
+            <p className="text-muted-foreground">Loading songs...</p>
+          </div>
+        ) : error ? (
+          <div className="text-center py-20">
+            <p className="text-muted-foreground text-lg">Failed to load songs. Please try again.</p>
+          </div>
+        ) : songs.length === 0 ? (
           <div className="text-center py-20">
             <p className="text-muted-foreground text-lg">No songs found matching your criteria.</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {filteredSongs.map((song, i) => (
-              <SongCard key={song.id} song={song} index={i} />
+          <div className="space-y-3 max-w-3xl">
+            {songs.map((song: Song, i: number) => (
+              <SongCard key={song._id} song={song} index={i} />
             ))}
           </div>
         )}

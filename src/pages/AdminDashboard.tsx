@@ -1,10 +1,65 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { Upload, Music, Users, FileText, Plus, Tag } from "lucide-react";
 import { motion } from "framer-motion";
-import { mockSongs, mockCustomRequests, TAGS } from "@/lib/mockData";
+import { TAGS } from "@/lib/mockData";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { adminAPI, songsAPI } from "@/lib/api";
+import { toast } from "@/hooks/use-toast";
 
 const AdminDashboard = () => {
   const [activeTab, setActiveTab] = useState<"songs" | "requests" | "upload">("songs");
+  const queryClient = useQueryClient();
+
+  // admin data
+  const { data: songsData, refetch: refetchSongs } = useQuery({
+    queryKey: ['admin-songs'],
+    queryFn: adminAPI.getSongs,
+  });
+  const { data: requestsData, refetch: refetchRequests } = useQuery({
+    queryKey: ['admin-requests'],
+    queryFn: adminAPI.getCustomRequests,
+  });
+
+  const songs = songsData?.songs || [];
+  const requests = requestsData?.requests || [];
+
+  // upload form state
+  const [form, setForm] = useState({
+    title: '',
+    artist: '',
+    description: '',
+    price: '',
+    tags: ''
+  });
+  const audioRef = useRef<HTMLInputElement>(null);
+  const previewRef = useRef<HTMLInputElement>(null);
+
+  const uploadMutation = useMutation({
+    mutationFn: (fd: FormData) => songsAPI.createSong(fd),
+    onSuccess: () => {
+      toast({ title: 'Song uploaded', description: 'The song was added successfully.' });
+      refetchSongs();
+      setForm({ title: '', artist: '', description: '', price: '', tags: '' });
+      if (audioRef.current) audioRef.current.value = '';
+      if (previewRef.current) previewRef.current.value = '';
+    },
+    onError: (err: any) => {
+      toast({ title: 'Upload failed', description: err.response?.data?.message || 'Try again', variant: 'destructive' });
+    }
+  });
+
+  const handleUpload = (e: React.FormEvent) => {
+    e.preventDefault();
+    const fd = new FormData();
+    fd.append('title', form.title);
+    fd.append('artist', form.artist);
+    fd.append('description', form.description);
+    fd.append('price', form.price);
+    fd.append('tags', form.tags);
+    if (audioRef.current?.files?.[0]) fd.append('audioFile', audioRef.current.files[0]);
+    if (previewRef.current?.files?.[0]) fd.append('previewFile', previewRef.current.files[0]);
+    uploadMutation.mutate(fd);
+  };
 
   const tabs = [
     { id: "songs" as const, label: "Songs", icon: Music },
@@ -46,19 +101,19 @@ const AdminDashboard = () => {
         {/* Songs list */}
         {activeTab === "songs" && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-4">
-            {mockSongs.map((song) => (
-              <div key={song.id} className="glass rounded-xl p-4 flex items-center gap-4">
-                <img src={song.coverImage} alt={song.title} className="w-14 h-14 rounded-lg object-cover" />
+            {songs.map((song: any) => (
+              <div key={song._id} className="glass rounded-xl p-4 flex items-center gap-4">
                 <div className="flex-1 min-w-0">
                   <h3 className="font-display font-semibold text-foreground truncate">{song.title}</h3>
-                  <div className="flex gap-1.5 mt-1">
-                    {song.tags.map((tag) => (
+                  <p className="text-sm text-muted-foreground">{song.artist}</p>
+                  <div className="flex gap-1.5 mt-1.5 flex-wrap">
+                    {song.tags.map((tag: string) => (
                       <span key={tag} className="px-2 py-0.5 rounded-full text-xs bg-primary/10 text-primary">{tag}</span>
                     ))}
                   </div>
                 </div>
-                <span className="font-display font-bold text-foreground">₹{song.price.toLocaleString("en-IN")}</span>
-                <span className={`px-3 py-1 rounded-full text-xs font-medium ${song.isSold ? "bg-destructive/20 text-destructive" : "bg-accent/20 text-accent"}`}>
+                <span className="font-display font-bold text-foreground whitespace-nowrap">₹{song.price.toLocaleString("en-IN")}</span>
+                <span className={`px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap ${song.isSold ? "bg-destructive/20 text-destructive" : "bg-accent/20 text-accent"}`}>
                   {song.isSold ? "Sold" : "Available"}
                 </span>
               </div>
@@ -69,8 +124,8 @@ const AdminDashboard = () => {
         {/* Custom Requests */}
         {activeTab === "requests" && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-4">
-            {mockCustomRequests.map((req) => (
-              <div key={req.id} className="glass rounded-xl p-5">
+            {requests.map((req: any) => (
+              <div key={req._id} className="glass rounded-xl p-5">
                 <div className="flex items-start justify-between mb-3">
                   <div>
                     <h3 className="font-display font-semibold text-foreground">{req.occasion} — {req.names}</h3>
@@ -98,59 +153,85 @@ const AdminDashboard = () => {
           <motion.form
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            onSubmit={(e) => e.preventDefault()}
+            onSubmit={handleUpload}
             className="glass rounded-2xl p-6 md:p-8 max-w-2xl space-y-5"
           >
             <div>
               <label className="block text-sm font-medium text-foreground mb-2">Song Title *</label>
-              <input placeholder="Enter song title" className="w-full px-4 py-3 rounded-xl bg-secondary text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all" />
+              <input
+                required
+                value={form.title}
+                onChange={(e) => setForm({ ...form, title: e.target.value })}
+                placeholder="Enter song title"
+                className="w-full px-4 py-3 rounded-xl bg-secondary text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-2">Artist *</label>
+              <input
+                required
+                value={form.artist}
+                onChange={(e) => setForm({ ...form, artist: e.target.value })}
+                placeholder="Artist name"
+                className="w-full px-4 py-3 rounded-xl bg-secondary text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all"
+              />
             </div>
             <div>
               <label className="block text-sm font-medium text-foreground mb-2">Description</label>
-              <textarea rows={3} placeholder="Song description" className="w-full px-4 py-3 rounded-xl bg-secondary text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all resize-none" />
+              <textarea
+                rows={3}
+                value={form.description}
+                onChange={(e) => setForm({ ...form, description: e.target.value })}
+                placeholder="Song description"
+                className="w-full px-4 py-3 rounded-xl bg-secondary text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all resize-none"
+              />
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-foreground mb-2">Price (₹) *</label>
-                <input type="number" placeholder="e.g. 2999" className="w-full px-4 py-3 rounded-xl bg-secondary text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all" />
+                <input
+                  required
+                  type="number"
+                  value={form.price}
+                  onChange={(e) => setForm({ ...form, price: e.target.value })}
+                  placeholder="e.g. 2999"
+                  className="w-full px-4 py-3 rounded-xl bg-secondary text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all"
+                />
               </div>
               <div>
                 <label className="block text-sm font-medium text-foreground mb-2">Tags</label>
-                <select className="w-full px-4 py-3 rounded-xl bg-secondary text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all">
-                  <option value="">Select tags</option>
-                  {TAGS.map((t) => <option key={t} value={t}>{t}</option>)}
-                </select>
-              </div>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-foreground mb-2">Cover Image</label>
-              <div className="border-2 border-dashed border-border rounded-xl p-8 text-center hover:border-primary/50 transition-colors cursor-pointer">
-                <Plus className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
-                <p className="text-sm text-muted-foreground">Click to upload cover image</p>
+                <input
+                  value={form.tags}
+                  onChange={(e) => setForm({ ...form, tags: e.target.value })}
+                  placeholder="comma-separated tags"
+                  className="w-full px-4 py-3 rounded-xl bg-secondary text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all"
+                />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-foreground mb-2">Preview Audio</label>
-                <div className="border-2 border-dashed border-border rounded-xl p-4 text-center hover:border-primary/50 transition-colors cursor-pointer">
-                  <Music className="w-6 h-6 text-muted-foreground mx-auto mb-1" />
-                  <p className="text-xs text-muted-foreground">Upload preview (120s max)</p>
-                </div>
+                <input type="file" accept="audio/*" ref={previewRef} className="w-full" />
               </div>
               <div>
                 <label className="block text-sm font-medium text-foreground mb-2">Full Audio</label>
-                <div className="border-2 border-dashed border-border rounded-xl p-4 text-center hover:border-primary/50 transition-colors cursor-pointer">
-                  <Music className="w-6 h-6 text-muted-foreground mx-auto mb-1" />
-                  <p className="text-xs text-muted-foreground">Upload full song</p>
-                </div>
+                <input type="file" accept="audio/*" ref={audioRef} className="w-full" />
               </div>
             </div>
-            <button type="submit" className="w-full py-3 rounded-xl font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-all glow-primary flex items-center justify-center gap-2">
-              <Upload className="w-4 h-4" /> Upload Song
+            <button
+              type="submit"
+              disabled={uploadMutation.isPending}
+              className="w-full py-3 rounded-xl font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-all glow-primary flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {uploadMutation.isPending ? (
+                <div className="w-4 h-4 border border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin" />
+              ) : (
+                <Upload className="w-4 h-4" />
+              )}
+              {uploadMutation.isPending ? 'Uploading...' : 'Upload Song'}
             </button>
           </motion.form>
-        )}
-      </div>
+        )}      </div>
     </div>
   );
 };

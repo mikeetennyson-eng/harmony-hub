@@ -31,7 +31,7 @@ const purchaseSchema = new Schema<IPurchase>({
   paymentMethod: {
     type: String,
     required: true,
-    enum: ['card', 'upi', 'netbanking', 'wallet']
+    enum: ['card', 'upi', 'netbanking', 'wallet', 'razorpay']
   },
   paymentStatus: {
     type: String,

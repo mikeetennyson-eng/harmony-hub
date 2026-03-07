@@ -118,6 +118,11 @@ export const songsAPI = {
     return response.data;
   },
 
+  getTags: async () => {
+    const response = await api.get('/songs/tags/all');
+    return response.data;
+  },
+
   getPurchasedSongs: async () => {
     const response = await api.get('/songs/user/purchased');
     return response.data;
@@ -251,6 +256,13 @@ export const adminAPI = {
     return response.data;
   },
 
+  uploadSongForRequest: async (requestId: string, data: FormData) => {
+    const response = await api.post(`/custom-requests/${requestId}/upload`, data, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    });
+    return response.data;
+  },
+
   getUsers: async () => {
     const response = await api.get('/admin/users');
     return response.data;
@@ -258,6 +270,29 @@ export const adminAPI = {
 
   getPurchases: async () => {
     const response = await api.get('/admin/purchases');
+    return response.data;
+  },
+};
+
+// Payments API
+export const paymentsAPI = {
+  createOrder: async (songIds: string[]) => {
+    const response = await api.post('/payments/create-order', { songIds });
+    return response.data;
+  },
+
+  verifyPayment: async (data: {
+    razorpay_order_id: string;
+    razorpay_payment_id: string;
+    razorpay_signature: string;
+    purchaseId: string;
+  }) => {
+    const response = await api.post('/payments/verify-payment', data);
+    return response.data;
+  },
+
+  getPaymentStatus: async (orderId: string) => {
+    const response = await api.get(`/payments/status/${orderId}`);
     return response.data;
   },
 };

@@ -13,6 +13,7 @@ import songRoutes from './routes/songs.js';
 import purchaseRoutes from './routes/purchases.js';
 import customRequestRoutes from './routes/customRequests.js';
 import adminRoutes from './routes/admin.js';
+import paymentRoutes from './routes/payments.js';
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -44,6 +45,7 @@ app.use('/api/songs', songRoutes);
 app.use('/api/purchases', purchaseRoutes);
 app.use('/api/custom-requests', customRequestRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/payments', paymentRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {

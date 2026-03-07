@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Music, Mail, Lock, Eye, EyeOff, User } from "lucide-react";
 import { motion } from "framer-motion";
 import { Link, useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 
@@ -18,6 +19,7 @@ const Login = () => {
   const { login, register } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
+  const { t } = useTranslation();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -27,20 +29,20 @@ const Login = () => {
       if (isSignUp) {
         await register(formData.email, formData.password, formData.name);
         toast({
-          title: "Account created successfully!",
-          description: "Welcome to AI Song Vault",
+          title: t('auth.registerSuccess'),
+          description: "Welcome to Harmony Hub",
         });
       } else {
         await login(formData.email, formData.password);
         toast({
-          title: "Welcome back!",
+          title: t('auth.loginSuccess'),
           description: "Successfully signed in",
         });
       }
       navigate('/');
     } catch (error: any) {
       toast({
-        title: "Authentication failed",
+        title: isSignUp ? t('auth.registerError') : t('auth.loginError'),
         description: error.response?.data?.message || "Please check your credentials",
         variant: "destructive",
       });
@@ -69,10 +71,10 @@ const Login = () => {
             <Music className="w-8 h-8 text-primary" />
           </div>
           <h1 className="font-display text-2xl font-bold text-foreground">
-            {isSignUp ? "Create Account" : "Welcome Back"}
+            {isSignUp ? t('auth.register') : t('auth.login')}
           </h1>
           <p className="text-muted-foreground mt-1">
-            {isSignUp ? "Join AI Song Vault" : "Sign in to AI Song Vault"}
+            {isSignUp ? "Join Harmony Hub" : "Sign in to Harmony Hub"}
           </p>
         </div>
 
@@ -82,13 +84,13 @@ const Login = () => {
         >
           {isSignUp && (
             <div>
-              <label className="block text-sm font-medium text-foreground mb-2">Full Name</label>
+              <label className="block text-sm font-medium text-foreground mb-2">{t('auth.name')}</label>
               <div className="relative">
                 <User className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                 <input
                   type="text"
                   name="name"
-                  placeholder="Your name"
+                  placeholder={t('auth.name')}
                   value={formData.name}
                   onChange={handleInputChange}
                   required
@@ -99,7 +101,7 @@ const Login = () => {
           )}
 
           <div>
-            <label className="block text-sm font-medium text-foreground mb-2">Email</label>
+            <label className="block text-sm font-medium text-foreground mb-2">{t('auth.email')}</label>
             <div className="relative">
               <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <input
@@ -115,7 +117,7 @@ const Login = () => {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-foreground mb-2">Password</label>
+            <label className="block text-sm font-medium text-foreground mb-2">{t('auth.password')}</label>
             <div className="relative">
               <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <input
@@ -143,17 +145,17 @@ const Login = () => {
             disabled={loading}
             className="w-full py-3 rounded-xl font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-all glow-primary disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {loading ? "Please wait..." : (isSignUp ? "Create Account" : "Sign In")}
+            {loading ? t('common.loading') : (isSignUp ? t('auth.registerButton') : t('auth.loginButton'))}
           </button>
 
           <p className="text-center text-sm text-muted-foreground">
-            {isSignUp ? "Already have an account?" : "Don't have an account?"}{" "}
+            {isSignUp ? t('auth.hasAccount') : t('auth.noAccount')}{" "}
             <button
               type="button"
               onClick={() => setIsSignUp(!isSignUp)}
               className="text-primary hover:underline"
             >
-              {isSignUp ? "Sign In" : "Sign Up"}
+              {isSignUp ? t('auth.login') : t('auth.register')}
             </button>
           </p>
         </form>

@@ -12,6 +12,7 @@ export interface ISong extends Document {
   duration: number; // in seconds
   isSold: boolean;
   soldTo?: mongoose.Types.ObjectId[]; // users who purchased this song
+  forSale: boolean; // whether this song should appear in marketplace
   createdAt: Date;
   updatedAt: Date;
 }
@@ -59,7 +60,11 @@ const songSchema = new Schema<ISong>({
   soldTo: [{
     type: Schema.Types.ObjectId,
     ref: 'User'
-  }]
+  }],
+  forSale: {
+    type: Boolean,
+    default: true
+  }
 }, {
   timestamps: true
 });

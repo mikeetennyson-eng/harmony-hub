@@ -6,7 +6,7 @@ import CustomRequest from '../models/CustomRequest.js';
 import User from '../models/User.js';
 import Purchase from '../models/Purchase.js';
 import { auth, adminAuth } from '../middleware/auth.js';
-import { uploadToR2, getSignedUrlForAudio } from '../utils/storage.js';
+import { uploadToR2, deleteFromR2 } from '../utils/storage.js';
 
 // multer memory storage so we can forward buffers to R2
 const upload = multer({ storage: multer.memoryStorage() });
@@ -115,25 +115,13 @@ router.post('/songs', upload.fields([
       }
     }
 
-    // Generate signed URLs
-    let audioUrl, previewUrl;
-    try {
-      audioUrl = await getSignedUrlForAudio(audioKey);
-      if (previewKey) {
-        previewUrl = await getSignedUrlForAudio(previewKey);
-      }
-    } catch (urlError) {
-      console.error('URL generation error:', urlError);
-      res.status(500).json({ message: 'Failed to generate access URLs' });
-      return;
-    }
-
+    // Store keys directly instead of signed URLs (for consistency and to avoid expiration)
     const songData = {
       title: title.trim(),
       artist: artist.trim(),
       description: (description || '').trim(),
-      audioFile: audioUrl,
-      previewUrl,
+      audioFile: audioKey,
+      previewUrl: previewKey,
       tags: tags ? tags.split(',').map((t: string) => t.trim()).filter((t: string) => t) : [],
       price: parseFloat(price) || 0,
     };
@@ -162,27 +150,74 @@ router.put('/songs/:id', upload.fields([
   { name: 'previewFile', maxCount: 1 }
 ]), protectedRoute, async (req: Request, res: Response): Promise<void> => {
   try {
-    const updateData: any = { ...req.body };
-    // handle new uploads
-    if (req.files) {
-      if ((req.files as any).audioFile) {
-        const audio = (req.files as any).audioFile[0];
-        const audioKey = `audio/${Date.now()}_${audio.originalname}`;
-        updateData.audioFile = await uploadToR2(audioKey, audio.buffer, audio.mimetype);
-      }
-      if ((req.files as any).previewFile) {
-        const preview = (req.files as any).previewFile[0];
-        const previewKey = `previews/${Date.now()}_${preview.originalname}`;
-        updateData.previewUrl = await uploadToR2(previewKey, preview.buffer, preview.mimetype);
-      }
-    }
-
-    const song = await Song.findByIdAndUpdate(req.params.id, updateData, { new: true });
+    const song = await Song.findById(req.params.id);
     if (!song) {
       res.status(404).json({ message: 'Song not found' });
       return;
     }
-    res.json({ song });
+
+    const updateData: any = { ...req.body };
+
+    // Handle new audio file upload
+    if (req.files && (req.files as any).audioFile) {
+      const audio = (req.files as any).audioFile[0];
+      const audioKey = `audio/${Date.now()}_${audio.originalname}`;
+
+      // Upload new file to R2
+      await uploadToR2(audioKey, audio.buffer, audio.mimetype);
+
+      // Delete old audio file from R2 if it exists
+      if (song.audioFile) {
+        try {
+          // Extract key from stored value (could be URL or key)
+          let oldKey = song.audioFile;
+          if (oldKey.startsWith('http')) {
+            const parts = oldKey.split('/songs/');
+            if (parts.length > 1 && parts[1]) {
+              oldKey = parts[1];
+            }
+          }
+          await deleteFromR2(oldKey);
+        } catch (deleteError) {
+          console.error('Failed to delete old audio file:', deleteError);
+          // Don't fail the update if old file deletion fails
+        }
+      }
+
+      updateData.audioFile = audioKey; // Store key directly
+    }
+
+    // Handle new preview file upload
+    if (req.files && (req.files as any).previewFile) {
+      const preview = (req.files as any).previewFile[0];
+      const previewKey = `previews/${Date.now()}_${preview.originalname}`;
+
+      // Upload new file to R2
+      await uploadToR2(previewKey, preview.buffer, preview.mimetype);
+
+      // Delete old preview file from R2 if it exists
+      if (song.previewUrl) {
+        try {
+          // Extract key from stored value (could be URL or key)
+          let oldKey = song.previewUrl;
+          if (oldKey.startsWith('http')) {
+            const parts = oldKey.split('/songs/');
+            if (parts.length > 1 && parts[1]) {
+              oldKey = parts[1];
+            }
+          }
+          await deleteFromR2(oldKey);
+        } catch (deleteError) {
+          console.error('Failed to delete old preview file:', deleteError);
+          // Don't fail the update if old file deletion fails
+        }
+      }
+
+      updateData.previewUrl = previewKey; // Store key directly
+    }
+
+    const updatedSong = await Song.findByIdAndUpdate(req.params.id, updateData, { new: true });
+    res.json({ song: updatedSong });
   } catch (error) {
     res.status(500).json({ message: 'Server error' });
   }
@@ -190,8 +225,51 @@ router.put('/songs/:id', upload.fields([
 
 router.delete('/songs/:id', protectedRoute, async (req: Request, res: Response) => {
   try {
+    const song = await Song.findById(req.params.id);
+    if (!song) {
+      res.status(404).json({ message: 'Song not found' });
+      return;
+    }
+
+    // Delete audio file from R2 if it exists
+    if (song.audioFile) {
+      try {
+        // Extract key from stored value (could be URL or key)
+        let audioKey = song.audioFile;
+        if (audioKey.startsWith('http')) {
+          const parts = audioKey.split('/songs/');
+          if (parts.length > 1 && parts[1]) {
+            audioKey = parts[1];
+          }
+        }
+        await deleteFromR2(audioKey);
+      } catch (deleteError) {
+        console.error('Failed to delete audio file from R2:', deleteError);
+        // Don't fail the deletion if R2 cleanup fails
+      }
+    }
+
+    // Delete preview file from R2 if it exists
+    if (song.previewUrl) {
+      try {
+        // Extract key from stored value (could be URL or key)
+        let previewKey = song.previewUrl;
+        if (previewKey.startsWith('http')) {
+          const parts = previewKey.split('/songs/');
+          if (parts.length > 1 && parts[1]) {
+            previewKey = parts[1];
+          }
+        }
+        await deleteFromR2(previewKey);
+      } catch (deleteError) {
+        console.error('Failed to delete preview file from R2:', deleteError);
+        // Don't fail the deletion if R2 cleanup fails
+      }
+    }
+
+    // Delete from database
     await Song.findByIdAndDelete(req.params.id);
-    res.json({ message: 'Song deleted' });
+    res.json({ message: 'Song deleted successfully' });
   } catch (error) {
     res.status(500).json({ message: 'Server error' });
   }

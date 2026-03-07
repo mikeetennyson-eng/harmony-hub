@@ -2,10 +2,12 @@ import { useState } from "react";
 import { Sparkles, Send, CheckCircle } from "lucide-react";
 import { motion } from "framer-motion";
 import { useMutation, useQuery } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
 import { customRequestsAPI } from "@/lib/api";
 import { toast } from "@/hooks/use-toast";
 
 const CustomRequest = () => {
+  const { t } = useTranslation();
   const [submitted, setSubmitted] = useState(false);
   const [form, setForm] = useState({
     occasion: "",
@@ -38,8 +40,8 @@ const CustomRequest = () => {
     }) => customRequestsAPI.createRequest(data),
     onSuccess: () => {
       toast({
-        title: "Request submitted!",
-        description: "We'll start working on your custom song soon.",
+        title: t("customRequest.submitSuccess"),
+        description: t("customRequest.submitSuccessDesc"),
       });
       setSubmitted(true);
       refetch();
@@ -55,9 +57,23 @@ const CustomRequest = () => {
       });
     },
     onError: (error: any) => {
+      console.error('Custom request error:', error.response?.data);
+
+      let errorMessage = t("customRequest.submitError");
+
+      if (error.response?.data?.errors) {
+        // Handle express-validator errors
+        const validationErrors = error.response.data.errors;
+        if (Array.isArray(validationErrors) && validationErrors.length > 0) {
+          errorMessage = validationErrors.map((err: any) => err.msg || err.message).join(', ');
+        }
+      } else if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      }
+
       toast({
-        title: "Submission failed",
-        description: error.response?.data?.message || "Something went wrong. Please try again.",
+        title: t("customRequest.submitFailed"),
+        description: errorMessage,
         variant: "destructive",
       });
     },
@@ -65,14 +81,82 @@ const CustomRequest = () => {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    createRequestMutation.mutate({
-      ...form,
-      budget: parseInt(form.budget),
-    });
+
+    // Basic frontend validation
+    if (!form.occasion.trim() || form.occasion.trim().length < 2) {
+      toast({
+        title: t("customRequest.validationError"),
+        description: t("customRequest.occasionError"),
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!form.names.trim()) {
+      toast({
+        title: t("customRequest.validationError"),
+        description: t("customRequest.namesError"),
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!form.tone) {
+      toast({
+        title: t("customRequest.validationError"),
+        description: t("customRequest.toneError"),
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!form.language) {
+      toast({
+        title: t("customRequest.validationError"),
+        description: t("customRequest.languageError"),
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!form.description.trim() || form.description.trim().length < 10) {
+      toast({
+        title: t("customRequest.validationError"),
+        description: t("customRequest.descriptionError"),
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const budgetNum = parseInt(form.budget);
+    if (isNaN(budgetNum) || budgetNum < 0) {
+      toast({
+        title: t("customRequest.validationError"),
+        description: t("customRequest.budgetError"),
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const requestData: any = {
+      occasion: form.occasion.trim(),
+      names: form.names.trim(),
+      tone: form.tone.toLowerCase(),
+      language: form.language.toLowerCase(),
+      description: form.description.trim(),
+      budget: budgetNum,
+    };
+
+    // Only include brandName if it's not empty
+    if (form.brandName.trim()) {
+      requestData.brandName = form.brandName.trim();
+    }
+
+    createRequestMutation.mutate(requestData);
   };
 
-  const tones = ["Romantic", "Hype", "Emotional", "Devotional", "Corporate"];
-  const languages = ["English", "Hindi", "Tamil", "Telugu", "Punjabi", "Bengali"];
+  const tones = ["Romantic", "Hype", "Emotional", "Devotional", "Corporate", "Celebratory"];
+  const languages = ["English", "Hindi", "Tamil", "Telugu", "Punjabi", "Bengali", "Marathi", "Gujarati"];
 
   return (
     <div className="min-h-screen pt-20 pb-20">
@@ -85,11 +169,11 @@ const CustomRequest = () => {
           <div className="flex items-center gap-3 mb-2">
             <Sparkles className="w-6 h-6 text-primary" />
             <h1 className="font-display text-3xl md:text-4xl font-bold text-gradient">
-              Custom Song Request
+              {t("customRequest.title")}
             </h1>
           </div>
           <p className="text-muted-foreground mb-8">
-            Tell us your story and we'll craft a unique AI-powered song just for you.
+            {t("customRequest.description")}
           </p>
         </motion.div>
 
@@ -101,10 +185,10 @@ const CustomRequest = () => {
           >
             <CheckCircle className="w-16 h-16 text-primary mx-auto mb-4" />
             <h2 className="font-display text-2xl font-bold text-foreground">
-              Request Submitted!
+              {t("customRequest.submitted")}
             </h2>
             <p className="text-muted-foreground mt-2">
-              We'll start working on your custom song. Track progress below.
+              {t("customRequest.submittedDesc")}
             </p>
           </motion.div>
         ) : (
@@ -117,35 +201,35 @@ const CustomRequest = () => {
           >
             {/* Occasion */}
             <div>
-              <label className="block text-sm font-medium text-foreground mb-2">Occasion *</label>
+              <label className="block text-sm font-medium text-foreground mb-2">{t("customRequest.occasion")} *</label>
               <input
                 required
                 value={form.occasion}
                 onChange={(e) => setForm({ ...form, occasion: e.target.value })}
-                placeholder="e.g. Wedding, Birthday, Brand Launch"
+                placeholder={t("customRequest.occasionPlaceholder")}
                 className="w-full px-4 py-3 rounded-xl bg-secondary text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all"
               />
             </div>
 
             {/* Names */}
             <div>
-              <label className="block text-sm font-medium text-foreground mb-2">Names Involved *</label>
+              <label className="block text-sm font-medium text-foreground mb-2">{t("customRequest.names")} *</label>
               <input
                 required
                 value={form.names}
                 onChange={(e) => setForm({ ...form, names: e.target.value })}
-                placeholder="e.g. John & Sarah"
+                placeholder={t("customRequest.namesPlaceholder")}
                 className="w-full px-4 py-3 rounded-xl bg-secondary text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all"
               />
             </div>
 
             {/* Brand Name */}
             <div>
-              <label className="block text-sm font-medium text-foreground mb-2">Brand Name (optional)</label>
+              <label className="block text-sm font-medium text-foreground mb-2">{t("customRequest.brandName")}</label>
               <input
                 value={form.brandName}
                 onChange={(e) => setForm({ ...form, brandName: e.target.value })}
-                placeholder="e.g. Your Company Name"
+                placeholder={t("customRequest.brandNamePlaceholder")}
                 className="w-full px-4 py-3 rounded-xl bg-secondary text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all"
               />
             </div>
@@ -153,28 +237,28 @@ const CustomRequest = () => {
             {/* Tone & Language */}
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-foreground mb-2">Tone *</label>
+                <label className="block text-sm font-medium text-foreground mb-2">{t("customRequest.tone")} *</label>
                 <select
                   required
                   value={form.tone}
                   onChange={(e) => setForm({ ...form, tone: e.target.value })}
                   className="w-full px-4 py-3 rounded-xl bg-secondary text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all"
                 >
-                  <option value="">Select tone</option>
+                  <option value="">{t("customRequest.selectTone")}</option>
                   {tones.map((t) => (
                     <option key={t} value={t}>{t}</option>
                   ))}
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-foreground mb-2">Language *</label>
+                <label className="block text-sm font-medium text-foreground mb-2">{t("customRequest.language")} *</label>
                 <select
                   required
                   value={form.language}
                   onChange={(e) => setForm({ ...form, language: e.target.value })}
                   className="w-full px-4 py-3 rounded-xl bg-secondary text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all"
                 >
-                  <option value="">Select language</option>
+                  <option value="">{t("customRequest.selectLanguage")}</option>
                   {languages.map((l) => (
                     <option key={l} value={l}>{l}</option>
                   ))}
@@ -184,26 +268,26 @@ const CustomRequest = () => {
 
             {/* Description */}
             <div>
-              <label className="block text-sm font-medium text-foreground mb-2">Description *</label>
+              <label className="block text-sm font-medium text-foreground mb-2">{t("customRequest.description")} *</label>
               <textarea
                 required
                 rows={4}
                 value={form.description}
                 onChange={(e) => setForm({ ...form, description: e.target.value })}
-                placeholder="Tell us your story, special memories, or specific lyrics you'd like..."
+                placeholder={t("customRequest.descriptionPlaceholder")}
                 className="w-full px-4 py-3 rounded-xl bg-secondary text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all resize-none"
               />
             </div>
 
             {/* Budget */}
             <div>
-              <label className="block text-sm font-medium text-foreground mb-2">Budget (₹) *</label>
+              <label className="block text-sm font-medium text-foreground mb-2">{t("customRequest.budget")} (₹) *</label>
               <input
                 required
                 type="number"
                 value={form.budget}
                 onChange={(e) => setForm({ ...form, budget: e.target.value })}
-                placeholder="e.g. 5000"
+                placeholder={t("customRequest.budgetPlaceholder")}
                 className="w-full px-4 py-3 rounded-xl bg-secondary text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all"
               />
             </div>
@@ -218,7 +302,7 @@ const CustomRequest = () => {
               ) : (
                 <Send className="w-4 h-4" />
               )}
-              {createRequestMutation.isPending ? "Submitting..." : "Submit Request"}
+              {createRequestMutation.isPending ? t("customRequest.submitting") : t("customRequest.submit")}
             </button>
           </motion.form>
         )}
@@ -232,7 +316,7 @@ const CustomRequest = () => {
             className="mt-12"
           >
             <h2 className="font-display text-xl font-bold text-foreground mb-4">
-              Your Requests
+              {t("customRequest.yourRequests")}
             </h2>
             <div className="space-y-4">
               {requests.map((req: any) => (
@@ -255,7 +339,7 @@ const CustomRequest = () => {
                           : "bg-muted text-muted-foreground"
                       }`}
                     >
-                      {req.status === "in_progress" ? "In Progress" : req.status === "completed" ? "Completed" : "Pending"}
+                      {req.status === "in_progress" ? t("customRequest.inProgress") : req.status === "completed" ? t("customRequest.completed") : t("customRequest.pending")}
                     </span>
                   </div>
                 </div>

@@ -1,4 +1,4 @@
-import { S3Client, PutObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
+import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import dotenv from 'dotenv';
 
@@ -47,13 +47,27 @@ export const uploadToR2 = async (
   }
 };
 
+export const deleteFromR2 = async (key: string): Promise<void> => {
+  const command = new DeleteObjectCommand({
+    Bucket: BUCKET,
+    Key: key,
+  });
+  try {
+    await s3.send(command);
+    console.log(`Deleted from R2: ${key}`);
+  } catch (error) {
+    console.error(`R2 deletion failed for ${key}:`, error);
+    throw error;
+  }
+};
+
 export const getSignedUrlForAudio = async (urlOrKey: string): Promise<string> => {
   // Extract just the key from the full URL if needed
   let key = urlOrKey;
   if (urlOrKey.startsWith('http')) {
     // Extract key from URL like: https://...r2.cloudflarestorage.com/songs/audio/xxxx_file.mp3
     const parts = urlOrKey.split('/songs/');
-    if (parts.length > 1) {
+    if (parts.length > 1 && parts[1]) {
       key = parts[1]; // Get "audio/xxxx_file.mp3"
     }
   }

@@ -38,35 +38,21 @@ router.post('/', auth, [
     // Calculate total
     const totalAmount = songs.reduce((sum, song) => sum + song.price, 0);
 
-    // Create purchase record
+    // Create purchase record (pending payment)
     const purchase = new Purchase({
       user: userId,
       songs: songIds,
       totalAmount,
       paymentMethod,
-      paymentStatus: 'completed', // For demo - in real app, integrate payment gateway
-      transactionId: `TXN_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+      paymentStatus: 'pending', // Start as pending
+      transactionId: `PENDING_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
     });
 
     await purchase.save();
 
-    // Update songs as sold and add to user's purchased songs
-    await Song.updateMany(
-      { _id: { $in: songIds } },
-      {
-        $set: { isSold: true },
-        $push: { soldTo: userId }
-      }
-    );
-
-    // Add songs to user's purchased songs
-    await User.findByIdAndUpdate(userId, {
-      $push: { purchasedSongs: { $each: songIds } }
-    });
-
     res.status(201).json({
       purchase,
-      message: 'Purchase completed successfully'
+      message: 'Purchase initiated. Please complete payment.'
     });
   } catch (error) {
     console.error('Purchase error:', error);

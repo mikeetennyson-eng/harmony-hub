@@ -1,5 +1,7 @@
 import { TAGS } from "@/lib/mockData";
 import { motion } from "framer-motion";
+import { useQuery } from "@tanstack/react-query";
+import { songsAPI } from "@/lib/api";
 
 interface TagFilterProps {
   selectedTags: string[];
@@ -7,6 +9,15 @@ interface TagFilterProps {
 }
 
 const TagFilter = ({ selectedTags, onTagToggle }: TagFilterProps) => {
+  // Fetch tags from backend
+  const { data: tagsData, isLoading } = useQuery({
+    queryKey: ['tags'],
+    queryFn: songsAPI.getTags,
+  });
+
+  // Use fetched tags if available, fallback to mock tags
+  const tags = tagsData?.tags || TAGS;
+
   return (
     <div className="flex flex-wrap gap-2">
       <button
@@ -19,23 +30,27 @@ const TagFilter = ({ selectedTags, onTagToggle }: TagFilterProps) => {
       >
         All
       </button>
-      {TAGS.map((tag) => {
-        const isActive = selectedTags.includes(tag);
-        return (
-          <motion.button
-            key={tag}
-            whileTap={{ scale: 0.95 }}
-            onClick={() => onTagToggle(tag)}
-            className={`px-4 py-2 rounded-full text-sm font-medium transition-all duration-300 ${
-              isActive
-                ? "bg-primary/20 text-primary neon-border"
-                : "bg-secondary text-muted-foreground hover:text-foreground hover:bg-secondary/80"
-            }`}
-          >
-            {tag}
-          </motion.button>
-        );
-      })}
+      {isLoading ? (
+        <div className="animate-spin w-4 h-4 border-2 border-primary border-t-transparent rounded-full" />
+      ) : (
+        tags.map((tag: string) => {
+          const isActive = selectedTags.includes(tag);
+          return (
+            <motion.button
+              key={tag}
+              whileTap={{ scale: 0.95 }}
+              onClick={() => onTagToggle(tag)}
+              className={`px-4 py-2 rounded-full text-sm font-medium transition-all duration-300 ${
+                isActive
+                  ? "bg-primary/20 text-primary neon-border"
+                  : "bg-secondary text-muted-foreground hover:text-foreground hover:bg-secondary/80"
+              }`}
+            >
+              {tag}
+            </motion.button>
+          );
+        })
+      )}
     </div>
   );
 };

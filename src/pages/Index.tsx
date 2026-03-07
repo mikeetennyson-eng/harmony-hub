@@ -2,6 +2,7 @@ import { useState, useMemo } from "react";
 import { Search, Sparkles } from "lucide-react";
 import { motion } from "framer-motion";
 import { useQuery } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
 import SongCard from "@/components/SongCard";
 import TagFilter from "@/components/TagFilter";
 import { songsAPI, Song } from "@/lib/api";
@@ -10,6 +11,7 @@ import heroBg from "@/assets/hero-bg.jpg";
 const Index = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const { t } = useTranslation();
 
   // Fetch songs from API
   const { data: songsData, isLoading, error } = useQuery({
@@ -48,13 +50,10 @@ const Index = () => {
               AI-Powered Custom Songs
             </div>
             <h1 className="font-display text-4xl md:text-6xl lg:text-7xl font-bold text-gradient leading-tight">
-              Your Story,
-              <br />
-              Our Music
+              {t('home.welcome')}
             </h1>
             <p className="mt-6 text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto">
-              Discover AI-crafted songs for every occasion — weddings, birthdays,
-              brands, and more. Or request a custom song made just for you.
+              {t('home.subtitle')}
             </p>
           </motion.div>
 
@@ -69,7 +68,7 @@ const Index = () => {
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
               <input
                 type="text"
-                placeholder="Search songs by title or tag..."
+                placeholder={t('marketplace.search')}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full pl-12 pr-4 py-4 rounded-xl glass-strong text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all"
@@ -93,15 +92,15 @@ const Index = () => {
         {isLoading ? (
           <div className="text-center py-20">
             <div className="animate-spin w-8 h-8 border-2 border-primary border-t-transparent rounded-full mx-auto mb-4"></div>
-            <p className="text-muted-foreground">Loading songs...</p>
+            <p className="text-muted-foreground">{t('common.loading')}</p>
           </div>
         ) : error ? (
           <div className="text-center py-20">
-            <p className="text-muted-foreground text-lg">Failed to load songs. Please try again.</p>
+            <p className="text-muted-foreground text-lg">{t('marketplace.noSongs')}</p>
           </div>
         ) : songs.length === 0 ? (
           <div className="text-center py-20">
-            <p className="text-muted-foreground text-lg">No songs found matching your criteria.</p>
+            <p className="text-muted-foreground text-lg">{t('marketplace.noSongs')}</p>
           </div>
         ) : (
           <div className="space-y-3 max-w-3xl">

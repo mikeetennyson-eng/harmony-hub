@@ -1,7 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { Play, Pause, SkipBack, SkipForward, Volume2, VolumeX } from "lucide-react";
 import { motion } from "framer-motion";
-import { songsAPI } from "../lib/api";
 
 interface AudioPlayerProps {
   title: string;
@@ -12,23 +11,38 @@ interface AudioPlayerProps {
   maxDuration?: number;
 }
 
+const API_BASE_URL = 'http://localhost:5000/api';
+
 const AudioPlayer = ({ title, artist, songId, src: directSrc, isPreview = true, maxDuration = 120 }: AudioPlayerProps) => {
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [isMuted, setIsMuted] = useState(false);
   const [src, setSrc] = useState<string>(directSrc || '');
+  const [isLoading, setIsLoading] = useState(false);
+  const [duration, setDuration] = useState(maxDuration);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const lastUpdateRef = useRef(0);
   const isSeeking = useRef(false);
   const blobUrlRef = useRef<string>('');
-  const duration = maxDuration;
 
-  // Fetch audio blob and create object URL
+  // Fetch audio with authentication header
   useEffect(() => {
     if (songId) {
       const fetchAudio = async () => {
         try {
-          const blob = await songsAPI.getAudioStream(songId);
+          setIsLoading(true);
+          const token = localStorage.getItem('token');
+          const response = await fetch(`${API_BASE_URL}/songs/stream/${songId}`, {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          });
+          
+          if (!response.ok) {
+            throw new Error(`Failed to fetch audio: ${response.status}`);
+          }
+          
+          const blob = await response.blob();
           // Revoke old blob URL to free memory
           if (blobUrlRef.current) {
             URL.revokeObjectURL(blobUrlRef.current);
@@ -37,10 +51,12 @@ const AudioPlayer = ({ title, artist, songId, src: directSrc, isPreview = true, 
           const blobUrl = URL.createObjectURL(blob);
           blobUrlRef.current = blobUrl;
           setSrc(blobUrl);
+          setIsLoading(false);
           console.log('Audio blob loaded:', songId);
         } catch (error) {
           console.error('Failed to load audio:', error);
           setSrc('');
+          setIsLoading(false);
         }
       };
 
@@ -73,13 +89,31 @@ const AudioPlayer = ({ title, artist, songId, src: directSrc, isPreview = true, 
     };
   }, []);
 
-  // Don't render if no src
-  if (!src) {
+  // Don't render if no src and not loading
+  if (!src && !isLoading) {
     return (
       <div className="glass-strong rounded-2xl p-5">
         <div className="text-center text-muted-foreground">
           <p>Audio not available</p>
           {isPreview && <p className="text-xs mt-2">Purchase this song to listen</p>}
+        </div>
+      </div>
+    );
+  }
+
+  // Show loading state
+  if (isLoading) {
+    return (
+      <div className="glass-strong rounded-2xl p-5">
+        <div className="flex items-center justify-center">
+          <div className="flex flex-col items-center gap-3">
+            <motion.div
+              animate={{ rotate: 360 }}
+              transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+              className="w-8 h-8 border-3 border-primary/30 border-t-primary rounded-full"
+            />
+            <p className="text-sm text-muted-foreground">Loading audio...</p>
+          </div>
         </div>
       </div>
     );
@@ -124,6 +158,12 @@ const AudioPlayer = ({ title, artist, songId, src: directSrc, isPreview = true, 
         preload="auto"
         onTimeUpdate={handleTimeUpdate}
         onEnded={() => setIsPlaying(false)}
+        onLoadedMetadata={() => {
+          if (audioRef.current) {
+            setDuration(audioRef.current.duration);
+            console.log('Audio duration loaded:', audioRef.current.duration);
+          }
+        }}
         onError={(e) => {
           console.error('Audio loading error:', e);
           const audio = e.currentTarget;

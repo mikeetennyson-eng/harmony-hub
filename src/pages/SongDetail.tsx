@@ -3,7 +3,8 @@ import { ArrowLeft, ShoppingCart, Tag, Check } from "lucide-react";
 import { motion } from "framer-motion";
 import AudioPlayer from "@/components/AudioPlayer";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { songsAPI, Song, purchasesAPI } from "@/lib/api";
+import { useTranslation } from "react-i18next";
+import { songsAPI, Song, paymentsAPI } from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
 
@@ -11,6 +12,7 @@ const SongDetail = () => {
   const { id } = useParams<{ id: string }>();
   const queryClient = useQueryClient();
   const { user } = useAuth();
+  const { t } = useTranslation();
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['song', id],
@@ -21,14 +23,62 @@ const SongDetail = () => {
   const song: Song | undefined = data?.song;
 
   const purchaseMutation = useMutation({
-    mutationFn: () => purchasesAPI.createPurchase({ songIds: [id!], paymentMethod: 'card' }),
-    onSuccess: () => {
-      toast({ title: 'Purchased!', description: 'You now own this song.' });
-      queryClient.invalidateQueries({ queryKey: ['song', id] });
-      queryClient.invalidateQueries({ queryKey: ['purchased-songs'] });
+    mutationFn: async () => {
+      // Create Razorpay order
+      const orderData = await paymentsAPI.createOrder([id!]);
+
+      // Initialize Razorpay checkout
+      const options = {
+        key: orderData.key,
+        amount: orderData.amount,
+        currency: orderData.currency,
+        order_id: orderData.orderId,
+        name: 'Harmony Hub',
+        description: `Purchase: ${song?.title} by ${song?.artist}`,
+        handler: async function (response: any) {
+          try {
+            // Verify payment on backend
+            await paymentsAPI.verifyPayment({
+              razorpay_order_id: response.razorpay_order_id,
+              razorpay_payment_id: response.razorpay_payment_id,
+              razorpay_signature: response.razorpay_signature,
+              purchaseId: orderData.purchaseId,
+            });
+
+            toast({
+              title: t('payment.success'),
+              description: t('song.owned')
+            });
+
+            // Refresh data
+            queryClient.invalidateQueries({ queryKey: ['song', id] });
+            queryClient.invalidateQueries({ queryKey: ['purchased-songs'] });
+          } catch (error: any) {
+            toast({
+              title: t('payment.verificationFailed'),
+              description: error.response?.data?.message || t('common.error'),
+              variant: 'destructive'
+            });
+          }
+        },
+        prefill: {
+          email: user?.email,
+          name: user?.name,
+        },
+        theme: {
+          color: '#7c3aed', // Purple theme
+        },
+      };
+
+      const rzp = new (window as any).Razorpay(options);
+      rzp.open();
     },
     onError: (err: any) => {
-      toast({ title: 'Purchase failed', description: err.response?.data?.message || 'Try again', variant: 'destructive' });
+      toast({
+        title: t('payment.failed'),
+        description: err.response?.data?.message || t('common.error'),
+        variant: 'destructive'
+      });
     },
   });
 
@@ -45,7 +95,7 @@ const SongDetail = () => {
   if (error || !song) {
     return (
       <div className="min-h-screen pt-24 flex items-center justify-center">
-        <p className="text-muted-foreground">Song not found.</p>
+        <p className="text-muted-foreground">{t('song.songNotFound')}</p>
       </div>
     );
   }
@@ -60,7 +110,7 @@ const SongDetail = () => {
           className="inline-flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors mb-8"
         >
           <ArrowLeft className="w-4 h-4" />
-          Back to Marketplace
+          {t('song.backToMarketplace')}
         </Link>
 
         <motion.div
@@ -110,7 +160,7 @@ const SongDetail = () => {
                 <button
                   onClick={() => {
                     if (!user) {
-                      toast({ title: 'Please login', description: 'You need to be logged in to purchase.', variant: 'destructive' });
+                      toast({ title: t('auth.login'), description: t('song.purchaseToListen'), variant: 'destructive' });
                       return;
                     }
                     if (isPurchased) return;
@@ -126,7 +176,7 @@ const SongDetail = () => {
                   ) : (
                     <ShoppingCart className="w-5 h-5" />
                   )}
-                  {isPurchased ? 'Owned' : 'Buy Now'}
+                  {isPurchased ? t('song.owned') : t('song.buyNow')}
                 </button>
               </div>
             </div>

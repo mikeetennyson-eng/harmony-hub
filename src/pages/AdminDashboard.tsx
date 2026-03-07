@@ -1,5 +1,5 @@
 import { useState, useRef } from "react";
-import { Upload, Music, Users, FileText, Plus, Tag } from "lucide-react";
+import { Upload, Music, Users, FileText, Plus, Tag, Edit2, Trash2 } from "lucide-react";
 import { motion } from "framer-motion";
 import { TAGS } from "@/lib/mockData";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -8,6 +8,9 @@ import { toast } from "@/hooks/use-toast";
 
 const AdminDashboard = () => {
   const [activeTab, setActiveTab] = useState<"songs" | "requests" | "upload">("songs");
+  const [uploadingRequest, setUploadingRequest] = useState<string | null>(null);
+  const [uploadForm, setUploadForm] = useState({ title: '', artist: '', description: '', price: '' });
+  const uploadAudioRef = useRef<HTMLInputElement>(null);
   const queryClient = useQueryClient();
 
   // admin data
@@ -48,6 +51,42 @@ const AdminDashboard = () => {
     }
   });
 
+  const uploadRequestMutation = useMutation({
+    mutationFn: (data: { requestId: string; fd: FormData }) => adminAPI.uploadSongForRequest(data.requestId, data.fd),
+    onSuccess: () => {
+      toast({ title: 'Song uploaded', description: 'Song added to user\'s library.' });
+      refetchRequests();
+      setUploadingRequest(null);
+      setUploadForm({ title: '', artist: '', description: '', price: '' });
+      if (uploadAudioRef.current) uploadAudioRef.current.value = '';
+    },
+    onError: (err: any) => {
+      toast({ title: 'Upload failed', description: err.response?.data?.message || 'Try again', variant: 'destructive' });
+    }
+  });
+
+  const editMutation = useMutation({
+    mutationFn: (data: { id: string; fd: FormData }) => songsAPI.updateSong(data.id, data.fd),
+    onSuccess: () => {
+      toast({ title: 'Song updated', description: 'Changes saved successfully.' });
+      refetchSongs();
+    },
+    onError: (err: any) => {
+      toast({ title: 'Update failed', description: err.response?.data?.message || 'Try again', variant: 'destructive' });
+    }
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => songsAPI.deleteSong(id),
+    onSuccess: () => {
+      toast({ title: 'Song deleted', description: 'Song removed from library.' });
+      refetchSongs();
+    },
+    onError: (err: any) => {
+      toast({ title: 'Delete failed', description: err.response?.data?.message || 'Try again', variant: 'destructive' });
+    }
+  });
+
   const handleUpload = (e: React.FormEvent) => {
     e.preventDefault();
     const fd = new FormData();
@@ -59,6 +98,17 @@ const AdminDashboard = () => {
     if (audioRef.current?.files?.[0]) fd.append('audioFile', audioRef.current.files[0]);
     if (previewRef.current?.files?.[0]) fd.append('previewFile', previewRef.current.files[0]);
     uploadMutation.mutate(fd);
+  };
+
+  const handleUploadForRequest = (e: React.FormEvent, requestId: string) => {
+    e.preventDefault();
+    const fd = new FormData();
+    fd.append('title', uploadForm.title);
+    fd.append('artist', uploadForm.artist);
+    fd.append('description', uploadForm.description);
+    fd.append('price', uploadForm.price);
+    if (uploadAudioRef.current?.files?.[0]) fd.append('audioFile', uploadAudioRef.current.files[0]);
+    uploadRequestMutation.mutate({ requestId, fd });
   };
 
   const tabs = [
@@ -116,6 +166,32 @@ const AdminDashboard = () => {
                 <span className={`px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap ${song.isSold ? "bg-destructive/20 text-destructive" : "bg-accent/20 text-accent"}`}>
                   {song.isSold ? "Sold" : "Available"}
                 </span>
+                <button
+                  onClick={() => {
+                    // Edit functionality
+                    const newTitle = prompt('New title:', song.title);
+                    if (newTitle) {
+                      const fd = new FormData();
+                      fd.append('title', newTitle);
+                      editMutation.mutate({ id: song._id, fd });
+                    }
+                  }}
+                  className="p-2 text-muted-foreground hover:text-primary transition-colors"
+                  title="Edit song"
+                >
+                  <Edit2 className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => {
+                    if (confirm('Delete this song?')) {
+                      deleteMutation.mutate(song._id);
+                    }
+                  }}
+                  className="p-2 text-muted-foreground hover:text-destructive transition-colors"
+                  title="Delete song"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
               </div>
             ))}
           </motion.div>
@@ -138,11 +214,81 @@ const AdminDashboard = () => {
                   </span>
                 </div>
                 <p className="text-sm text-secondary-foreground">{req.description}</p>
-                <div className="flex gap-2 mt-4">
-                  <button className="px-4 py-2 rounded-lg text-sm bg-primary text-primary-foreground hover:bg-primary/90 transition-all flex items-center gap-2">
-                    <Upload className="w-4 h-4" /> Upload Song
-                  </button>
-                </div>
+                {req.status !== 'completed' && (
+                  <div className="flex gap-2 mt-4">
+                    <button
+                      onClick={() => setUploadingRequest(req._id)}
+                      className="px-4 py-2 rounded-lg text-sm bg-primary text-primary-foreground hover:bg-primary/90 transition-all flex items-center gap-2"
+                    >
+                      <Upload className="w-4 h-4" /> Upload Song
+                    </button>
+                  </div>
+                )}
+                
+                {uploadingRequest === req._id && (
+                  <form onSubmit={(e) => handleUploadForRequest(e, req._id)} className="mt-4 p-4 bg-secondary rounded-lg space-y-3">
+                    <div>
+                      <label className="block text-sm font-medium text-foreground mb-1">Song Title *</label>
+                      <input
+                        required
+                        value={uploadForm.title}
+                        onChange={(e) => setUploadForm({ ...uploadForm, title: e.target.value })}
+                        placeholder="Enter song title"
+                        className="w-full px-3 py-2 rounded-lg bg-secondary text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-foreground mb-1">Artist *</label>
+                      <input
+                        required
+                        value={uploadForm.artist}
+                        onChange={(e) => setUploadForm({ ...uploadForm, artist: e.target.value })}
+                        placeholder="Artist name"
+                        className="w-full px-3 py-2 rounded-lg bg-secondary text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-foreground mb-1">Description</label>
+                      <input
+                        value={uploadForm.description}
+                        onChange={(e) => setUploadForm({ ...uploadForm, description: e.target.value })}
+                        placeholder="Song description"
+                        className="w-full px-3 py-2 rounded-lg bg-secondary text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-foreground mb-1">Price (₹) *</label>
+                      <input
+                        required
+                        type="number"
+                        value={uploadForm.price}
+                        onChange={(e) => setUploadForm({ ...uploadForm, price: e.target.value })}
+                        placeholder="e.g. 2999"
+                        className="w-full px-3 py-2 rounded-lg bg-secondary text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-foreground mb-1">Audio File *</label>
+                      <input type="file" accept="audio/*" ref={uploadAudioRef} required className="w-full text-sm" />
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        type="submit"
+                        disabled={uploadRequestMutation.isPending}
+                        className="px-4 py-2 rounded-lg text-sm bg-primary text-primary-foreground hover:bg-primary/90 transition-all disabled:opacity-50"
+                      >
+                        {uploadRequestMutation.isPending ? 'Uploading...' : 'Upload'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setUploadingRequest(null)}
+                        className="px-4 py-2 rounded-lg text-sm bg-secondary text-foreground hover:bg-secondary/80 transition-all"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </form>
+                )}
               </div>
             ))}
           </motion.div>

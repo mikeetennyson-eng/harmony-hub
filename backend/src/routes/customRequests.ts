@@ -1,9 +1,14 @@
 import express from 'express';
 import { Request, Response } from 'express';
 import { body, validationResult } from 'express-validator';
+import multer from 'multer';
 import CustomRequest from '../models/CustomRequest.js';
-import { auth } from '../middleware/auth.js';
+import Song from '../models/Song.js';
+import User from '../models/User.js';
+import { auth, adminAuth } from '../middleware/auth.js';
+import { uploadToR2 } from '../utils/storage.js';
 
+const upload = multer({ storage: multer.memoryStorage() });
 const router = express.Router();
 
 // Create custom request
@@ -67,6 +72,71 @@ router.get('/:id', auth, async (req: Request, res: Response): Promise<void> => {
 
     res.json({ request });
   } catch (error) {
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Upload song for custom request (admin only)
+router.post('/:id/upload', upload.single('audioFile'), auth, adminAuth, async (req: Request, res: Response): Promise<void> => {
+  try {
+    const customRequest = await CustomRequest.findById(req.params.id).populate('user');
+
+    if (!customRequest) {
+      res.status(404).json({ message: 'Custom request not found' });
+      return;
+    }
+
+    const { title, artist, description, price } = req.body as any;
+
+    // Validate required fields
+    if (!title || !artist || !price) {
+      res.status(400).json({ message: 'Title, artist, and price are required' });
+      return;
+    }
+
+    // Ensure audio file exists
+    if (!req.file) {
+      res.status(400).json({ message: 'Audio file is required' });
+      return;
+    }
+
+    // Upload to R2
+    const audioKey = `audio/${Date.now()}_${req.file.originalname}`;
+    await uploadToR2(audioKey, req.file.buffer, req.file.mimetype);
+
+    // Create song - store R2 key directly, not the signed URL
+    const song = new Song({
+      title: title.trim(),
+      artist: artist.trim(),
+      description: (description || '').trim(),
+      audioFile: audioKey, // Store the key, not the signed URL
+      tags: [],
+      price: parseFloat(price) || 0,
+      forSale: false // Custom songs don't appear in marketplace
+    });
+
+    await song.save();
+
+    // Add song to requesting user's purchased songs
+    const userId = (customRequest.user as any)._id;
+    await User.findByIdAndUpdate(
+      userId,
+      { $addToSet: { purchasedSongs: song._id } },
+      { new: true }
+    );
+
+    // Update custom request as completed
+    customRequest.status = 'completed';
+    customRequest.completedSong = song._id as any;
+    await customRequest.save();
+
+    res.status(201).json({
+      song,
+      request: customRequest,
+      message: 'Song uploaded and added to user\'s library'
+    });
+  } catch (error) {
+    console.error('Custom request upload error:', error);
     res.status(500).json({ message: 'Server error' });
   }
 });

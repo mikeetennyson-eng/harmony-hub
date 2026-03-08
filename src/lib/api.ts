@@ -134,9 +134,30 @@ export const songsAPI = {
   },
 
   downloadSong: async (songId: string) => {
-    const response = await api.get(`/songs/${songId}/download`);
-    return response.data; // { url }
-  },
+  const token = localStorage.getItem('token');
+
+  const response = await fetch(`${API_BASE_URL}/songs/stream/${songId}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error("Download failed");
+  }
+
+  const blob = await response.blob();
+  const url = window.URL.createObjectURL(blob);
+
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "song.mp3";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+
+  window.URL.revokeObjectURL(url);
+},
 
   // Fetch audio stream as blob with authentication
   getAudioStream: async (songId: string) => {

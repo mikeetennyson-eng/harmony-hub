@@ -13,24 +13,23 @@ const MySongs = () => {
 
   const songs = songsData?.songs || [];
 
-  const handleDownload = async (song: Song) => {
-    try {
-      const { url } = await songsAPI.downloadSong(song._id);
-      // open the presigned URL in new tab to trigger download
-      window.open(url, '_blank');
+ const handleDownload = async (song: Song) => {
+  try {
+    await songsAPI.downloadSong(song._id);
 
-      toast({
-        title: "Download ready",
-        description: `${song.title} will start downloading shortly.`,
-      });
-    } catch (error) {
-      toast({
-        title: "Download failed",
-        description: "Failed to download the song. Please try again.",
-        variant: "destructive",
-      });
-    }
-  };
+    toast({
+      title: "Download started",
+      description: `${song.title} is downloading.`,
+    });
+
+  } catch (error) {
+    toast({
+      title: "Download failed",
+      description: "Failed to download the song. Please try again.",
+      variant: "destructive",
+    });
+  }
+};
 
   return (
     <div className="min-h-screen pt-20 pb-20">

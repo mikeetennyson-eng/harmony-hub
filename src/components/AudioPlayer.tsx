@@ -11,7 +11,7 @@ interface AudioPlayerProps {
   maxDuration?: number;
 }
 
-const API_BASE_URL = 'http://localhost:5000/api';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
 
 const AudioPlayer = ({ title, artist, songId, src: directSrc, isPreview = true, maxDuration = 120 }: AudioPlayerProps) => {
   const [isPlaying, setIsPlaying] = useState(false);

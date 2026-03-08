@@ -31,7 +31,7 @@ const Index = () => {
   };
 
   return (
-    <div className="min-h-screen pt-16">
+    <div className="min-h-screen pt-1">
       {/* Hero */}
       <section className="relative overflow-hidden">
         <div className="absolute inset-0">
@@ -49,7 +49,7 @@ const Index = () => {
               <Sparkles className="w-4 h-4" />
               AI-Powered Custom Songs
             </div>
-            <h1 className="font-display text-4xl md:text-6xl lg:text-7xl font-bold text-gradient leading-tight">
+            <h1 className="font-display text-4xl md:text-6xl lg:text-7xl p-4 font-bold text-gradient leading-tight">
               {t('home.welcome')}
             </h1>
             <p className="mt-6 text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto">

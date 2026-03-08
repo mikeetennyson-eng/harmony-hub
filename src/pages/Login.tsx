@@ -30,7 +30,7 @@ const Login = () => {
         await register(formData.email, formData.password, formData.name);
         toast({
           title: t('auth.registerSuccess'),
-          description: "Welcome to Harmony Hub",
+          description: "Hi, Welcome to Raag Bazaar",
         });
       } else {
         await login(formData.email, formData.password);
@@ -74,7 +74,7 @@ const Login = () => {
             {isSignUp ? t('auth.register') : t('auth.login')}
           </h1>
           <p className="text-muted-foreground mt-1">
-            {isSignUp ? "Join Harmony Hub" : "Sign in to Harmony Hub"}
+            {isSignUp ? "Join Raag Bazaar" : "Sign in to Raag Bazaar"}
           </p>
         </div>
 
